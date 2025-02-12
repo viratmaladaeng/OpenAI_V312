@@ -1,0 +1,67 @@
+# Python-specific
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.sqlite3
+*.db
+
+# Virtual environment
+env/
+venv/
+ENV/
+.venv/
+.env/
+
+# Environment variables
+*.env
+*.env.*
+
+# Logs
+*.log
+*.out
+*.err
+logs/
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Byte-compiled / optimized / DLL files
+*.py[cod]
+*$py.class
+
+# Python egg files
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing
+.coverage
+.cache/
+.tox/
+.nox/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Other
+*.bak
+*.tmp
+*.pid
+*.seed
+*.old
+*.orig
+.env

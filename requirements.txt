@@ -1,0 +1,6 @@
+fastapi
+python-dotenv
+requests
+line-bot-sdk
+uvicorn[standard]
+openai
