@@ -4,3 +4,9 @@ requests
 line-bot-sdk
 uvicorn[standard]
 openai
+gunicorn
+python-dotenv
+azure-search-documents
+requests
+line-bot-sdk
+
