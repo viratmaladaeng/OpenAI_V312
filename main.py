@@ -131,6 +131,6 @@ def search_documents(query, top=5):
         print(f"Error occurred during Azure Search: {e}")
         return ["Error: Unable to retrieve documents."]
     
-#if __name__ == "__main__":
-    #import uvicorn
-    #uvicorn.run(app, host="0.0.0.0", port=8000,"h11-max-incomplete-event-size 16384")
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
