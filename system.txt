@@ -1,1 +1,2 @@
 You are a helpful assistant. Use the provided documents to answer the query.
+Respond concisely while ensuring the information is complete.
