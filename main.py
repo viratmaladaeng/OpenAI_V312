@@ -2,14 +2,16 @@ import os
 from fastapi import FastAPI, Request, HTTPException
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageSendMessage
 import requests
 from dotenv import load_dotenv
 import openai
 from azure.search.documents import SearchClient
 from azure.core.credentials import AzureKeyCredential
+import re  # ใช้ตรวจสอบ URL รูปภาพ
 
 load_dotenv()
+
 # สร้าง FastAPI instance
 app = FastAPI()
 
@@ -29,13 +31,6 @@ if not all([
     AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_KEY, AZURE_SEARCH_INDEX
 ]):
     raise ValueError("Environment variables not set properly")
-
-# Initialize Azure OpenAI
-openai.api_type = "azure"
-openai.api_base = AZURE_OPENAI_ENDPOINT
-openai.api_key = AZURE_OPENAI_API_KEY
-openai.api_version = "2024-08-01-preview"
-
 
 # ตั้งค่า Line Messaging API
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
@@ -62,42 +57,52 @@ async def callback(request: Request):
 def handle_message(event):
     user_message = event.message.text
 
-    # ค้นหาเอกสารจาก Azure Cognitive Search
-    search_results = search_documents(user_message)
+    # ตรวจสอบว่าข้อความมีลิงก์รูปภาพหรือไม่
+    image_url = extract_image_url(user_message)
 
-    # หากไม่มีผลลัพธ์ ให้ตอบกลับว่าหาไม่พบ
-    if not search_results or "Error" in search_results[0]:
-        grounding_message = "No relevant documents found for the query."
+    if image_url:
+        # ส่งรูปไปที่ LINE ก่อน
+        send_image_to_line(event.reply_token, image_url)
+        
+        # รอตอบข้อความเพิ่มเติม
+        bot_reply = "✅ รูปภาพถูกส่งไปที่ LINE เรียบร้อยแล้ว!"
     else:
-        grounding_message = "\n\n".join(search_results)
+        # ค้นหาเอกสารจาก Azure Cognitive Search
+        search_results = search_documents(user_message)
 
-    # ส่งข้อความไปยัง Azure OpenAI
-    headers = {
-        "Content-Type": "application/json",
-        "api-key": AZURE_OPENAI_API_KEY
-    }
-    payload = {
-            "messages": [
-                {
-                    "role": "system",
-                    "content": grounding_message
-                },
-                {
-                    "role": "user",
-                    "content": user_message
-                }
-            ],
-            "max_tokens": 800,
-            "temperature": 0.2
+        # หากไม่มีผลลัพธ์ ให้ตอบกลับว่าหาไม่พบ
+        if not search_results or "Error" in search_results[0]:
+            grounding_message = "No relevant documents found for the query."
+        else:
+            grounding_message = "\n\n".join(search_results)
+
+        # ส่งข้อความไปยัง Azure OpenAI
+        headers = {
+            "Content-Type": "application/json",
+            "api-key": AZURE_OPENAI_API_KEY
         }
-    
-    response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload)
-    
-    if response.status_code == 200:
-        openai_response = response.json()
-        bot_reply = openai_response["choices"][0]["message"]["content"]
-    else:
-        bot_reply = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
+        payload = {
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": grounding_message
+                    },
+                    {
+                        "role": "user",
+                        "content": user_message
+                    }
+                ],
+                "max_tokens": 800,
+                "temperature": 0.2
+            }
+        
+        response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload)
+        
+        if response.status_code == 200:
+            openai_response = response.json()
+            bot_reply = openai_response["choices"][0]["message"]["content"]
+        else:
+            bot_reply = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
 
     # ส่งข้อความกลับไปยัง Line
     line_bot_api.reply_message(
@@ -105,8 +110,22 @@ def handle_message(event):
         TextSendMessage(text=bot_reply)
     )
 
+def extract_image_url(text):
+    """ดึง URL รูปภาพจากข้อความ"""
+    image_pattern = r"(https?://\S+\.(?:png|jpg|jpeg|gif))"
+    match = re.search(image_pattern, text)
+    return match.group(0) if match else None
+
+def send_image_to_line(reply_token, image_url):
+    """ส่งรูปไปยัง LINE"""
+    image_message = ImageSendMessage(
+        original_content_url=image_url,
+        preview_image_url=image_url
+    )
+    line_bot_api.reply_message(reply_token, image_message)
+
 def search_documents(query, top=5):
-    """Search for relevant documents in Azure Cognitive Search."""
+    """ค้นหาเอกสารจาก Azure Cognitive Search"""
     try:
         print(f"Querying Azure Search with: {query}")
         search_client = SearchClient(
@@ -130,7 +149,7 @@ def search_documents(query, top=5):
     except Exception as e:
         print(f"Error occurred during Azure Search: {e}")
         return ["Error: Unable to retrieve documents."]
-    
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
