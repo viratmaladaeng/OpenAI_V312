@@ -90,7 +90,7 @@ def handle_message(event):
             {"role": "assistant", "content": grounding_message}
         ],
         "max_tokens": 800,
-        "temperature": 0.2
+        "temperature": 0.5
     }
     
     response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload)
