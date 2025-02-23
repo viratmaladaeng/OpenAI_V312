@@ -3,19 +3,18 @@ from fastapi import FastAPI, Request, HTTPException
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
-import requests
-from dotenv import load_dotenv
 import openai
 import redis
 import json
+from dotenv import load_dotenv
 from azure.search.documents import SearchClient
 from azure.core.credentials import AzureKeyCredential
 
 # โหลด environment variables
 load_dotenv()
 
-# สร้าง FastAPI instance
-app = FastAPI()
+# สร้าง FastAPI instance พร้อมเปิดการใช้งาน Swagger UI
+app = FastAPI(openapi_url="/openapi.json", docs_url="/docs")
 
 # ดึงค่าจาก Environment Variables
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
@@ -38,7 +37,13 @@ if not all([
     raise ValueError("Environment variables not set properly")
 
 # ตั้งค่า Redis Cache
-redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True)
+try:
+    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True)
+    redis_client.ping()
+    print("Connected to Redis successfully")
+except redis.ConnectionError:
+    print("Failed to connect to Redis")
+    redis_client = None
 
 # ตั้งค่า Azure OpenAI
 openai.api_type = "azure"
@@ -67,7 +72,7 @@ async def read_root():
 
 @app.post("/callback")
 async def callback(request: Request):
-    signature = request.headers["X-Line-Signature"]
+    signature = request.headers.get("X-Line-Signature")
     body = await request.body()
     
     try:
@@ -96,31 +101,26 @@ def handle_message(event):
     chat_history.append({"role": "assistant", "content": grounding_message})
 
     # ส่งข้อความไปยัง Azure OpenAI
-    headers = {
-        "Content-Type": "application/json",
-        "api-key": AZURE_OPENAI_API_KEY
-    }
-    payload = {
-        "messages": [
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": user_message},
-            {"role": "assistant", "content": grounding_message}
-        ],
-        "max_tokens": 800,
-        "temperature": 0.2
-    }
-    
-    response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload)
-    
-    if response.status_code == 200:
-        openai_response = response.json()
-        bot_reply = openai_response["choices"][0]["message"]["content"]
-    else:
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": system_message},
+                *chat_history
+            ],
+            max_tokens=800,
+            temperature=0.2
+        )
+        bot_reply = response["choices"][0]["message"]["content"]
+
+    except Exception as e:
+        print(f"Error calling Azure OpenAI: {e}")
         bot_reply = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
 
     # บันทึกข้อความใหม่ลง Redis
-    chat_history.append({"role": "assistant", "content": bot_reply})
-    save_chat_history(user_id, chat_history)
+    if redis_client:
+        chat_history.append({"role": "assistant", "content": bot_reply})
+        save_chat_history(user_id, chat_history)
 
     # ส่งข้อความกลับไปยัง Line
     line_bot_api.reply_message(
@@ -131,7 +131,6 @@ def handle_message(event):
 def search_documents(query, top=5):
     """Search for relevant documents in Azure Cognitive Search."""
     try:
-        print(f"Querying Azure Search with: {query}")
         search_client = SearchClient(
             endpoint=AZURE_SEARCH_ENDPOINT,
             index_name=AZURE_SEARCH_INDEX,
@@ -145,8 +144,6 @@ def search_documents(query, top=5):
             chunk = result.get("chunk", "No Content")
             documents.append(f"Title: {title}\nContent: {chunk}")
         
-        print(f"Documents fetched: {documents}")
-        
         return documents if documents else ["No relevant documents found."]
     except Exception as e:
         print(f"Error occurred during Azure Search: {e}")
@@ -154,13 +151,12 @@ def search_documents(query, top=5):
 
 def get_chat_history(user_id):
     """ดึงประวัติแชทของ User จาก Redis"""
-    history = redis_client.get(user_id)
-    return json.loads(history) if history else []
+    if redis_client:
+        history = redis_client.get(user_id)
+        return json.loads(history) if history else []
+    return []
 
 def save_chat_history(user_id, messages):
     """บันทึกประวัติแชทของ User ลง Redis (Session-Based)"""
-    redis_client.set(user_id, json.dumps(messages), ex=1800)  # 30 นาทีหมดอายุ
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    if redis_client:
+        redis_client.set(user_id, json.dumps(messages), ex=1800)  # 
