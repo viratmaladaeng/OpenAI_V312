@@ -148,3 +148,9 @@ def save_chat_history(user_id, messages):
     """บันทึกประวัติแชทของ User ลง Redis (Session-Based)"""
     if redis_client:
         redis_client.set(user_id, json.dumps(messages), ex=1800)  # 
+
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
