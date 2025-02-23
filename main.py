@@ -84,11 +84,7 @@ async def callback(request: Request):
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    user_id = event.source.user_id  # ดึง ID ของผู้ใช้ Line
     user_message = event.message.text
-
-    # ดึง Context เก่าของ User จาก Redis (ถ้ามี)
-    chat_history = get_chat_history(user_id)
 
     # ค้นหาเอกสารจาก Azure Cognitive Search
     search_results = search_documents(user_message)
@@ -96,38 +92,29 @@ def handle_message(event):
     # หากไม่มีผลลัพธ์ ให้ใช้ข้อความจาก grounding.txt
     grounding_message = grounding_text if not search_results or "Error" in search_results[0] else "\n\n".join(search_results)
 
-    # เพิ่มข้อความใหม่ใน Context
-    chat_history.append({"role": "user", "content": user_message})
-    chat_history.append({"role": "assistant", "content": grounding_message})
-
-    # ส่งข้อความไปยัง Azure OpenAI
+    # ส่งข้อความไปยัง Azure OpenAI โดยไม่มีการจัดการ Session-Based
     try:
         response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_message},
-                {"role": "user", "content": user_message}
+                {"role": "user", "content": user_message},
+                {"role": "assistant", "content": grounding_message}
             ],
-        max_tokens=800,
-        temperature=0.5
+            max_tokens=800,
+            temperature=0.5
         )
         bot_reply = response["choices"][0]["message"]["content"]
     except Exception as e:
         print(f"Error connecting to Azure OpenAI: {e}")
-    bot_reply = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
-
-
-
-    # บันทึกข้อความใหม่ลง Redis
-    if redis_client:
-        chat_history.append({"role": "assistant", "content": bot_reply})
-        save_chat_history(user_id, chat_history)
+        bot_reply = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
 
     # ส่งข้อความกลับไปยัง Line
     line_bot_api.reply_message(
         event.reply_token,
         TextSendMessage(text=bot_reply)
     )
+
 
 def search_documents(query, top=5):
     """Search for relevant documents in Azure Cognitive Search."""
