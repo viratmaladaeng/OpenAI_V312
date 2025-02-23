@@ -72,3 +72,6 @@ Desktop.ini
 "Lib/site-packages/redis*" 
 "Lib/site-packages/redis*" 
 "Lib/site-packages/redis*" 
+
+Lib/site-packages/redis/
+Lib/site-packages/redis-5.2.1.dist-info/

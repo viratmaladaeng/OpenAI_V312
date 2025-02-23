@@ -96,21 +96,26 @@ def handle_message(event):
     chat_history.append({"role": "assistant", "content": grounding_message})
 
     # ส่งข้อความไปยัง Azure OpenAI
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": system_message},
-                *chat_history  # ส่ง Context เก่าไปให้ AI
-            ],
-            max_tokens=800,
-            temperature=0.5
-        )
-
-        bot_reply = response["choices"][0]["message"]["content"]
-
-    except Exception as e:
-        print(f"Error calling Azure OpenAI: {e}")
+    headers = {
+        "Content-Type": "application/json",
+        "api-key": AZURE_OPENAI_API_KEY
+    }
+    payload = {
+        "messages": [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": user_message},
+            {"role": "assistant", "content": grounding_message}
+        ],
+        "max_tokens": 800,
+        "temperature": 0.2
+    }
+    
+    response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload)
+    
+    if response.status_code == 200:
+        openai_response = response.json()
+        bot_reply = openai_response["choices"][0]["message"]["content"]
+    else:
         bot_reply = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
 
     # บันทึกข้อความใหม่ลง Redis
