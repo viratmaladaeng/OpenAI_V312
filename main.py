@@ -6,10 +6,14 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 import requests
 from dotenv import load_dotenv
 import openai
+import redis
+import json
 from azure.search.documents import SearchClient
 from azure.core.credentials import AzureKeyCredential
 
+# โหลด environment variables
 load_dotenv()
+
 # สร้าง FastAPI instance
 app = FastAPI()
 
@@ -21,8 +25,11 @@ AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
 AZURE_SEARCH_ENDPOINT = os.getenv("AZURE_SEARCH_ENDPOINT")
 AZURE_SEARCH_KEY = os.getenv("AZURE_SEARCH_KEY")
 AZURE_SEARCH_INDEX = os.getenv("AZURE_SEARCH_INDEX")
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+REDIS_DB = int(os.getenv("REDIS_DB", 0))
 
-# ตรวจสอบว่าค่าถูกตั้งไว้
+# ตรวจสอบ Environment Variables
 if not all([
     LINE_CHANNEL_SECRET, LINE_CHANNEL_ACCESS_TOKEN, 
     AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY,
@@ -30,14 +37,16 @@ if not all([
 ]):
     raise ValueError("Environment variables not set properly")
 
-# Initialize Azure OpenAI
+# ตั้งค่า Redis Cache
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True)
+
+# ตั้งค่า Azure OpenAI
 openai.api_type = "azure"
 openai.api_base = AZURE_OPENAI_ENDPOINT
 openai.api_key = AZURE_OPENAI_API_KEY
 openai.api_version = "2024-08-01-preview"
 
 # ฟังก์ชันอ่านไฟล์ข้อความ
-
 def read_file(filename):
     if os.path.exists(filename):
         with open(filename, "r", encoding="utf-8") as file:
@@ -70,7 +79,11 @@ async def callback(request: Request):
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
+    user_id = event.source.user_id  # ดึง ID ของผู้ใช้ Line
     user_message = event.message.text
+
+    # ดึง Context เก่าของ User จาก Redis (ถ้ามี)
+    chat_history = get_chat_history(user_id)
 
     # ค้นหาเอกสารจาก Azure Cognitive Search
     search_results = search_documents(user_message)
@@ -78,28 +91,31 @@ def handle_message(event):
     # หากไม่มีผลลัพธ์ ให้ใช้ข้อความจาก grounding.txt
     grounding_message = grounding_text if not search_results or "Error" in search_results[0] else "\n\n".join(search_results)
 
+    # เพิ่มข้อความใหม่ใน Context
+    chat_history.append({"role": "user", "content": user_message})
+    chat_history.append({"role": "assistant", "content": grounding_message})
+
     # ส่งข้อความไปยัง Azure OpenAI
-    headers = {
-        "Content-Type": "application/json",
-        "api-key": AZURE_OPENAI_API_KEY
-    }
-    payload = {
-        "messages": [
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": user_message},
-            {"role": "assistant", "content": grounding_message}
-        ],
-        "max_tokens": 800,
-        "temperature": 0.5
-    }
-    
-    response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload)
-    
-    if response.status_code == 200:
-        openai_response = response.json()
-        bot_reply = openai_response["choices"][0]["message"]["content"]
-    else:
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": system_message},
+                *chat_history  # ส่ง Context เก่าไปให้ AI
+            ],
+            max_tokens=800,
+            temperature=0.5
+        )
+
+        bot_reply = response["choices"][0]["message"]["content"]
+
+    except Exception as e:
+        print(f"Error calling Azure OpenAI: {e}")
         bot_reply = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
+
+    # บันทึกข้อความใหม่ลง Redis
+    chat_history.append({"role": "assistant", "content": bot_reply})
+    save_chat_history(user_id, chat_history)
 
     # ส่งข้อความกลับไปยัง Line
     line_bot_api.reply_message(
@@ -130,7 +146,16 @@ def search_documents(query, top=5):
     except Exception as e:
         print(f"Error occurred during Azure Search: {e}")
         return ["Error: Unable to retrieve documents."]
-    
+
+def get_chat_history(user_id):
+    """ดึงประวัติแชทของ User จาก Redis"""
+    history = redis_client.get(user_id)
+    return json.loads(history) if history else []
+
+def save_chat_history(user_id, messages):
+    """บันทึกประวัติแชทของ User ลง Redis (Session-Based)"""
+    redis_client.set(user_id, json.dumps(messages), ex=1800)  # 30 นาทีหมดอายุ
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

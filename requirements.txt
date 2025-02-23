@@ -6,5 +6,5 @@ azure-search-documents
 requests
 line-bot-sdk
 openai
-
+redis
 
