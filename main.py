@@ -36,6 +36,17 @@ openai.api_base = AZURE_OPENAI_ENDPOINT
 openai.api_key = AZURE_OPENAI_API_KEY
 openai.api_version = "2024-08-01-preview"
 
+# ฟังก์ชันอ่านไฟล์ข้อความ
+
+def read_file(filename):
+    if os.path.exists(filename):
+        with open(filename, "r", encoding="utf-8") as file:
+            return file.read().strip()
+    return ""
+
+# โหลดข้อความจาก system.txt และ grounding.txt
+system_message = read_file("system.txt")
+grounding_text = read_file("grounding.txt")
 
 # ตั้งค่า Line Messaging API
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
@@ -47,7 +58,6 @@ async def read_root():
 
 @app.post("/callback")
 async def callback(request: Request):
-    # รับ webhook จาก Line
     signature = request.headers["X-Line-Signature"]
     body = await request.body()
     
@@ -65,11 +75,8 @@ def handle_message(event):
     # ค้นหาเอกสารจาก Azure Cognitive Search
     search_results = search_documents(user_message)
 
-    # หากไม่มีผลลัพธ์ ให้ตอบกลับว่าหาไม่พบ
-    if not search_results or "Error" in search_results[0]:
-        grounding_message = "No relevant documents found for the query."
-    else:
-        grounding_message = "\n\n".join(search_results)
+    # หากไม่มีผลลัพธ์ ให้ใช้ข้อความจาก grounding.txt
+    grounding_message = grounding_text if not search_results or "Error" in search_results[0] else "\n\n".join(search_results)
 
     # ส่งข้อความไปยัง Azure OpenAI
     headers = {
@@ -77,19 +84,14 @@ def handle_message(event):
         "api-key": AZURE_OPENAI_API_KEY
     }
     payload = {
-            "messages": [
-                {
-                    "role": "system",
-                    "content": grounding_message
-                },
-                {
-                    "role": "user",
-                    "content": user_message
-                }
-            ],
-            "max_tokens": 800,
-            "temperature": 0.2
-        }
+        "messages": [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": user_message},
+            {"role": "assistant", "content": grounding_message}
+        ],
+        "max_tokens": 800,
+        "temperature": 0.2
+    }
     
     response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload)
     
@@ -116,14 +118,12 @@ def search_documents(query, top=5):
         )
         results = search_client.search(search_text=query, top=top)
         
-        # รวม title และ chunk
         documents = []
         for result in results:
             title = result.get("title", "No Title")
             chunk = result.get("chunk", "No Content")
             documents.append(f"Title: {title}\nContent: {chunk}")
         
-        # Log results
         print(f"Documents fetched: {documents}")
         
         return documents if documents else ["No relevant documents found."]
