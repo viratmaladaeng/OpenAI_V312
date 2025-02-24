@@ -105,16 +105,12 @@ def handle_message(event):
         else:
             reply_message = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
 
-    # สร้างปุ่ม Quick Reply
-    quick_reply_buttons = QuickReply(items=[
-        QuickReplyButton(action=MessageAction(label="ถามข้อมูลเพิ่มเติม", text="ขอข้อมูลเพิ่มเติม"))
-    ])
+        # ส่งข้อความกลับไปยัง Line โดยไม่ใช้ Quick Reply
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=reply_message)
+        )
 
-    # ส่งข้อความกลับไปยัง Line พร้อม Quick Reply
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=reply_message, quick_reply=quick_reply_buttons)
-    )
 
 def search_documents(query, top=5):
     """Search for relevant documents in Azure Cognitive Search."""
