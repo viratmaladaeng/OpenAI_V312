@@ -72,44 +72,48 @@ async def callback(request: Request):
 def handle_message(event):
     user_message = event.message.text
 
-    # ค้นหาเอกสารจาก Azure Cognitive Search
-    search_results = search_documents(user_message)
-
-    # หากไม่มีผลลัพธ์ ให้ใช้ข้อความจาก grounding.txt
-    grounding_message = grounding_text if not search_results or "Error" in search_results[0] else "\n\n".join(search_results)
-
-    # ส่งข้อความไปยัง Azure OpenAI
-    headers = {
-        "Content-Type": "application/json",
-        "api-key": AZURE_OPENAI_API_KEY
-    }
-    payload = {
-        "messages": [
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": user_message},
-            {"role": "assistant", "content": grounding_message}
-        ],
-        "max_tokens": 800,
-        "temperature": 0.5
-    }
-    
-    response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload)
-    
-    if response.status_code == 200:
-        openai_response = response.json()
-        bot_reply = openai_response["choices"][0]["message"]["content"]
+    if user_message == "เริ่มการสนทนาใหม่":
+        # ตอบกลับข้อความพิเศษ
+        reply_message = "รบกวนคุณลูกค้าแจ้งว่าต้องการทราบข้อมูลสินค้า หรือบริการใดเพิ่มเติมค่ะ"
     else:
-        bot_reply = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
+        # ค้นหาเอกสารจาก Azure Cognitive Search
+        search_results = search_documents(user_message)
+
+        # หากไม่มีผลลัพธ์ ให้ใช้ข้อความจาก grounding.txt
+        grounding_message = grounding_text if not search_results or "Error" in search_results[0] else "\n\n".join(search_results)
+
+        # ส่งข้อความไปยัง Azure OpenAI
+        headers = {
+            "Content-Type": "application/json",
+            "api-key": AZURE_OPENAI_API_KEY
+        }
+        payload = {
+            "messages": [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message},
+                {"role": "assistant", "content": grounding_message}
+            ],
+            "max_tokens": 800,
+            "temperature": 0.5
+        }
+        
+        response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload)
+        
+        if response.status_code == 200:
+            openai_response = response.json()
+            reply_message = openai_response["choices"][0]["message"]["content"]
+        else:
+            reply_message = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
 
     # สร้างปุ่ม Quick Reply
     quick_reply_buttons = QuickReply(items=[
-        QuickReplyButton(action=MessageAction(label="เริ่มการสนทนาใหม่", text="เริ่มการสนทนาใหม่"))
+        QuickReplyButton(action=MessageAction(label="ถามข้อมูลเพิ่มเติม", text="ขอข้อมูลเพิ่มเติม"))
     ])
 
     # ส่งข้อความกลับไปยัง Line พร้อม Quick Reply
     line_bot_api.reply_message(
         event.reply_token,
-        TextSendMessage(text=bot_reply, quick_reply=quick_reply_buttons)
+        TextSendMessage(text=reply_message, quick_reply=quick_reply_buttons)
     )
 
 def search_documents(query, top=5):
