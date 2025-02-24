@@ -141,10 +141,10 @@ def search_documents(query, top=5):
         
         print(f"Documents fetched: {documents}")
         
-        return documents if documents else ["No relevant documents found."]
+        return documents if documents else ["ไม่พบข้อมูลที่เกี่ยวข้องค่ะ"]
     except Exception as e:
         print(f"Error occurred during Azure Search: {e}")
-        return ["Error: Unable to retrieve documents."]
+        return ["ขออภัย ไม่สามารถเรียกข้อมูลได้ค่ะ"]
     
 if __name__ == "__main__":
     import uvicorn
