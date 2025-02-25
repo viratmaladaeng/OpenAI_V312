@@ -1,14 +1,17 @@
 import os
+import uuid
 from fastapi import FastAPI, Request, HTTPException
-from linebot import LineBotApi, WebhookHandler
-from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction
-import requests
 from dotenv import load_dotenv
 import openai
 from azure.search.documents import SearchClient
 from azure.core.credentials import AzureKeyCredential
-import uuid
+import requests
+
+# ✅ ใช้ LINE SDK เวอร์ชัน 3.0+
+from linebot.v3.messaging import MessagingApi
+from linebot.v3.webhook import WebhookHandler
+from linebot.v3.exceptions import InvalidSignatureError
+from linebot.v3.models import MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction
 
 load_dotenv()
 
@@ -50,8 +53,8 @@ def read_file(filename):
 system_message = read_file("system.txt")
 grounding_text = read_file("grounding.txt")
 
-# 🔹 ตั้งค่า Line Messaging API
-line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
+# 🔹 ตั้งค่า Line Messaging API (เวอร์ชันใหม่)
+line_bot_api = MessagingApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 @app.get("/")
@@ -60,7 +63,7 @@ async def read_root():
 
 @app.post("/callback")
 async def callback(request: Request):
-    signature = request.headers["X-Line-Signature"]
+    signature = request.headers.get("X-Line-Signature", "")
     body = await request.body()
     
     try:
@@ -82,7 +85,7 @@ def handle_message(event):
         search_results = search_documents(user_message)
 
         # 🔹 หากไม่มีผลลัพธ์ ให้ใช้ grounding.txt
-        grounding_message = grounding_text if not search_results or "Error" in search_results[0] else "\n\n".join(search_results)
+        grounding_message = grounding_text if not search_results else "\n\n".join(search_results)
 
         # 🔹 ส่งข้อความไปยัง Azure OpenAI
         headers = {
