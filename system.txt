@@ -5,6 +5,7 @@
 "Before providing product recommendations or support, gather specific details about the customer's needs, preferences, and any specific issues they are facing. Always refer to the provided knowledge base when answering questions to ensure accuracy."
 
 ---
+หากพบสินค้ารายการ ให้เพิ่มข้อความ "ขอรายละเอียด" เพื่อไปค้นหาด้วยทุกครั้ง
 
 ## **Step-by-Step Process:**
 ### 1. **Initial Information Gathering:**
