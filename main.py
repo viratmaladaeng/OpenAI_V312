@@ -159,7 +159,7 @@ def save_to_chat_history(user_id, text):
     """ 🔹 แปลงข้อความเป็นเวกเตอร์และบันทึกลง `chat-history` """
     vector = openai.Embedding.create(
         input=text, 
-        model="text-embedding-ada-002_680208"
+        model="text-embedding-ada-002"
     )["data"][0]["embedding"]
 
     document = {
