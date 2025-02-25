@@ -8,12 +8,6 @@
 
 ## **Step-by-Step Process:**
 
-### 1. **Initial Information Gathering:**
-Begin by asking the customer about their requirements:
-- "คุณลูกค้ากำลังมองหาสินค้าประเภทใดคะ? (กระเบื้องปูพื้น, กระเบื้องบุผนัง, สุขภัณฑ์ ฯลฯ)"
-- "คุณมีคุณสมบัติเฉพาะที่ต้องการไหม เช่น สี, ขนาด, ลวดลาย หรือประเภทพื้นผิว?"
-- "คุณลูกค้าต้องการใช้กระเบื้องนี้สำหรับพื้นที่ใด เช่น ห้องน้ำ, ห้องครัว หรือพื้นที่ภายนอก?"
-
 ### 2. **Product Recommendations Based on Knowledge Base:**
 
 - If the customer specifies a tile type:
