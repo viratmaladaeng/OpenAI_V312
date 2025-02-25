@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI, Request, HTTPException
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction, FollowEvent
 import requests
 from dotenv import load_dotenv
 import openai
@@ -67,6 +67,20 @@ async def callback(request: Request):
         raise HTTPException(status_code=400, detail="Invalid signature")
 
     return "OK"
+
+@handler.add(FollowEvent)
+def handle_follow(event):
+    """ ตอบกลับเมื่อผู้ใช้เพิ่ม Bot ใหม่ หลังจากลบการสนทนา """
+    welcome_message = (
+        "ขอบคุณที่เพิ่มเราเป็นเพื่อนอีกครั้ง! 😊\n"
+        "หากต้องการสอบถามข้อมูลหรือเริ่มต้นสนทนาใหม่ พิมพ์ 'เริ่มการสนทนาใหม่' ได้เลยค่ะ"
+    )
+
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=welcome_message)
+    )
+
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
