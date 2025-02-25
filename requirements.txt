@@ -6,4 +6,4 @@ azure-search-documents
 requests
 line-bot-sdk
 openai
-pydantic
+pydantic==2.5.3
