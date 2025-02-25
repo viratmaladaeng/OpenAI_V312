@@ -108,7 +108,7 @@ def handle_message(event):
                 {"role": "assistant", "content": grounding_message}
             ],
             "max_tokens": 800,
-            "temperature": 0.5,
+            "temperature": 0.25,
 	        "top_p":0.95,
 	        "frequency_penalty":0,  
             "presence_penalty":0,
