@@ -98,7 +98,7 @@ def handle_message(event):
 	        "top_p":0.95,
 	        "frequency_penalty":0,  
             "presence_penalty":0,
-	        "stop":"เริ่มการสนทนาใหม่",
+	        "stop": ["เริ่มการสนทนาใหม่", "admin", "ผู้ดูแลระบบ"],  # เพิ่มคำที่ต้องการให้ AI หยุดเมื่อพบ
             "stream":False  
         }
         
