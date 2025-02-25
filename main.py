@@ -82,7 +82,7 @@ def handle_message(event):
         search_results = search_documents(user_message)
 
         # 🔹 หากไม่มีผลลัพธ์ ให้ใช้ grounding.txt
-        grounding_message = grounding_text if not search_results else "\n\n".join(search_results)
+        grounding_message = grounding_text if not search_results or "Error" in search_results[0] else "\n\n".join(search_results)
 
         # 🔹 ส่งข้อความไปยัง Azure OpenAI
         headers = {
@@ -101,8 +101,7 @@ def handle_message(event):
             "frequency_penalty": 0,
             "presence_penalty": 0,
             "stop":"เริ่มการสนทนาใหม่",
-            "stop":"ผู้ดูแลระบบ",
-            "stop":"admin"
+            "stream":False  
         }
         
         response = requests.post(f"{AZURE_OPENAI_ENDPOINT}/chat/completions", headers=headers, json=payload)
@@ -160,7 +159,7 @@ def save_to_chat_history(user_id, text):
     """ 🔹 แปลงข้อความเป็นเวกเตอร์และบันทึกลง `chat-history` """
     vector = openai.Embedding.create(
         input=text, 
-        model="text-embedding-ada-002"
+        model="text-embedding-ada-002_680208"
     )["data"][0]["embedding"]
 
     document = {
