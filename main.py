@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI, Request, HTTPException
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction, FollowEvent
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction, FollowEvent, JoinEvent
 import requests
 from dotenv import load_dotenv
 import openai
@@ -52,20 +52,6 @@ grounding_text = read_file("grounding.txt")
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
-def show_loading_animation(user_id):
-    try:
-        # ส่งข้อความแจ้งให้รอ พร้อมกับสติกเกอร์
-        loading_message = TextSendMessage(text="กำลังโหลดข้อมูล... กรุณารอสักครู่ 🕐")
-        line_bot_api.push_message(user_id, loading_message)
-
-    except Exception as e:
-        print(f"Error sending loading animation: {e}")
-
-@app.post("/send_loading/{user_id}")
-async def send_loading(user_id: str):
-    show_loading_animation(user_id)
-    return {"message": "Loading animation sent"}
-
 @app.get("/")
 async def read_root():
     return {"message": "Hello, world!"}
@@ -82,17 +68,22 @@ async def callback(request: Request):
 
     return "OK"
 
-@handler.add(FollowEvent)
-def handle_follow(event):
-    """ ตอบกลับเมื่อผู้ใช้เพิ่ม Bot ใหม่ หลังจากลบการสนทนา """
-    welcome_message = (
-        "ขอบคุณที่เพิ่มเราเป็นเพื่อนอีกครั้ง! 😊\n"
-        "หากต้องการสอบถามข้อมูลหรือเริ่มต้นสนทนาใหม่ พิมพ์ 'เริ่มการสนทนาใหม่' ได้เลยค่ะ"
+@handler.add(JoinEvent)
+def handle_join(event):
+    reply_token = event.reply_token
+    line_bot_api.reply_message(
+        reply_token,
+        TextSendMessage(text="สวัสดีค่ะ คุณลูกค้ากำลังมองหาสินค้าประเภทใดคะ? (กระเบื้องปูพื้น, กระเบื้องบุผนัง, สุขภัณฑ์ ,สี, ขนาด, ลวดลาย , พื้นที่ใช้งาน ฯลฯ) หรือบริการของเราเรื่องไหนคะ? ยินดีให้บริการอย่างเต็มที่เลยค่ะ 😊")
     )
 
+@handler.add(FollowEvent)
+def handle_follow(event):
+    user_id = event.source.user_id
+    reply_token = event.reply_token
+    
     line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=welcome_message)
+        reply_token,
+        TextSendMessage(text="สวัสดีค่ะ คุณลูกค้ากำลังมองหาสินค้าประเภทใดคะ? (กระเบื้องปูพื้น, กระเบื้องบุผนัง, สุขภัณฑ์ ,สี, ขนาด, ลวดลาย , พื้นที่ใช้งาน ฯลฯ) หรือบริการของเราเรื่องไหนคะ? ยินดีให้บริการอย่างเต็มที่เลยค่ะ 😊")
     )
 
 
@@ -115,6 +106,7 @@ def handle_message(event):
             "Content-Type": "application/json",
             "api-key": AZURE_OPENAI_API_KEY
         }
+
         payload = {
             "messages": [
                 {"role": "system", "content": system_message},
@@ -123,12 +115,13 @@ def handle_message(event):
             ],
             "max_tokens": 800,
             "temperature": 0.0,
-	        "top_p":0.4,
+	        "top_p":0.7,
 	        "frequency_penalty":0.8,  
-            "presence_penalty":0.2,
+            "presence_penalty":0.1,
 	        "stop": ["เริ่มการสนทนาใหม่", "admin", "ผู้ดูแลระบบ","ไม่มีข้อมูลในระบบ"],  # เพิ่มคำที่ต้องการให้ AI หยุดเมื่อพบ
             "stream":False  
         }
+
         
         response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload)
         
@@ -173,6 +166,8 @@ def search_documents(query, top=5):
     except Exception as e:
         print(f"Error occurred during Azure Search: {e}")
         return ["ขออภัย ไม่สามารถเรียกข้อมูลได้ค่ะ"]
+    
+
     
 if __name__ == "__main__":
     import uvicorn
