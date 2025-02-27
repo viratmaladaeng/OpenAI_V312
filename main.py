@@ -110,6 +110,10 @@ def handle_message(event):
         payload = {
             "messages": [
                 {"role": "system", "content": system_message},
+                {"role": "user", "content": "ฉันต้องการซื้อกระเบื้องสีขาว ขนาด 60x60 cm"},
+                {"role": "assistant", "content": "คุณลูกค้าสามารถเลือกกระเบื้องรุ่น A หรือ B ได้ค่ะ"},
+                {"role": "user", "content": "แล้วกระเบื้องพวกนี้เหมาะกับห้องน้ำไหม?"},
+                {"role": "assistant", "content": "ใช่ค่ะ กระเบื้องรุ่น A กันลื่นได้ดี เหมาะสำหรับห้องน้ำ"},
                 {"role": "user", "content": user_message},
                 {"role": "assistant", "content": grounding_message}
             ],
