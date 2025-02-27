@@ -52,6 +52,20 @@ grounding_text = read_file("grounding.txt")
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
+def show_loading_animation(user_id):
+    try:
+        # ส่งข้อความแจ้งให้รอ พร้อมกับสติกเกอร์
+        loading_message = TextSendMessage(text="กำลังโหลดข้อมูล... กรุณารอสักครู่ 🕐")
+        line_bot_api.push_message(user_id, loading_message)
+
+    except Exception as e:
+        print(f"Error sending loading animation: {e}")
+
+@app.post("/send_loading/{user_id}")
+async def send_loading(user_id: str):
+    show_loading_animation(user_id)
+    return {"message": "Loading animation sent"}
+
 @app.get("/")
 async def read_root():
     return {"message": "Hello, world!"}
@@ -109,9 +123,9 @@ def handle_message(event):
             ],
             "max_tokens": 800,
             "temperature": 0.0,
-	        "top_p":0.5,
-	        "frequency_penalty":1.0,  
-            "presence_penalty":0.0,
+	        "top_p":0.4,
+	        "frequency_penalty":0.8,  
+            "presence_penalty":0.2,
 	        "stop": ["เริ่มการสนทนาใหม่", "admin", "ผู้ดูแลระบบ","ไม่มีข้อมูลในระบบ"],  # เพิ่มคำที่ต้องการให้ AI หยุดเมื่อพบ
             "stream":False  
         }
