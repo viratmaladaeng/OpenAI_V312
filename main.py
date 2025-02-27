@@ -113,13 +113,14 @@ def handle_message(event):
                 {"role": "user", "content": user_message},
                 {"role": "assistant", "content": grounding_message}
             ],
+            "past_messages":7,
             "max_tokens": 800,
-            "temperature": 0.0,
-	        "top_p":0.5,
-	        "frequency_penalty":1.5,  
-            "presence_penalty":1.5,
+            "temperature": 0.2,
+	        "top_p":0.6,
+	        "frequency_penalty":0.8,
+            "presence_penalty":0.1,
 	        "stop": ["เริ่มการสนทนาใหม่", "admin", "ผู้ดูแลระบบ","ไม่มีข้อมูลในระบบ"],  # เพิ่มคำที่ต้องการให้ AI หยุดเมื่อพบ
-            "stream":False  
+            "stream":False
         }
 
         
