@@ -115,9 +115,9 @@ def handle_message(event):
             ],
             "max_tokens": 800,
             "temperature": 0.0,
-	        "top_p":0.7,
-	        "frequency_penalty":0,  
-            "presence_penalty":1,
+	        "top_p":0.4,
+	        "frequency_penalty":0.8,  
+            "presence_penalty":1.5,
 	        "stop": ["เริ่มการสนทนาใหม่", "admin", "ผู้ดูแลระบบ","ไม่มีข้อมูลในระบบ"],  # เพิ่มคำที่ต้องการให้ AI หยุดเมื่อพบ
             "stream":False  
         }
