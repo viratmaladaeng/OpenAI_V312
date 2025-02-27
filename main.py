@@ -113,7 +113,6 @@ def handle_message(event):
                 {"role": "user", "content": user_message},
                 {"role": "assistant", "content": grounding_message}
             ],
-            "past_messages": 7,
             "max_tokens": 800,
             "temperature": 0.1,
 	        "top_p":0.6,
