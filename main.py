@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI, Request, HTTPException
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction, FollowEvent, JoinEvent
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction, FollowEvent
 import requests
 from dotenv import load_dotenv
 import openai
@@ -35,7 +35,7 @@ if not all([
 openai.api_type = "azure"
 openai.api_base = AZURE_OPENAI_ENDPOINT
 openai.api_key = AZURE_OPENAI_API_KEY
-openai.api_version = "2024-08-01-preview"
+openai.api_version = "2024-05-01-preview"
 
 # ฟังก์ชันอ่านไฟล์ข้อความ
 def read_file(filename):
@@ -68,22 +68,17 @@ async def callback(request: Request):
 
     return "OK"
 
-@handler.add(JoinEvent)
-def handle_join(event):
-    reply_token = event.reply_token
-    line_bot_api.reply_message(
-        reply_token,
-        TextSendMessage(text="สวัสดีค่ะ คุณลูกค้ากำลังมองหาสินค้าประเภทใดคะ? (กระเบื้องปูพื้น, กระเบื้องบุผนัง, สุขภัณฑ์ ,สี, ขนาด, ลวดลาย , พื้นที่ใช้งาน ฯลฯ) หรือบริการของเราเรื่องไหนคะ? ยินดีให้บริการอย่างเต็มที่เลยค่ะ 😊")
-    )
-
 @handler.add(FollowEvent)
 def handle_follow(event):
-    user_id = event.source.user_id
-    reply_token = event.reply_token
-    
+    """ ตอบกลับเมื่อผู้ใช้เพิ่ม Bot ใหม่ หลังจากลบการสนทนา """
+    welcome_message = (
+        "ขอบคุณที่เพิ่มเราเป็นเพื่อนอีกครั้ง! 😊\n"
+        "หากต้องการสอบถามข้อมูลหรือเริ่มต้นสนทนาใหม่ พิมพ์ 'เริ่มการสนทนาใหม่' ได้เลยค่ะ"
+    )
+
     line_bot_api.reply_message(
-        reply_token,
-        TextSendMessage(text="สวัสดีค่ะ คุณลูกค้ากำลังมองหาสินค้าประเภทใดคะ? (กระเบื้องปูพื้น, กระเบื้องบุผนัง, สุขภัณฑ์ ,สี, ขนาด, ลวดลาย , พื้นที่ใช้งาน ฯลฯ) หรือบริการของเราเรื่องไหนคะ? ยินดีให้บริการอย่างเต็มที่เลยค่ะ 😊")
+        event.reply_token,
+        TextSendMessage(text=welcome_message)
     )
 
 
@@ -113,15 +108,14 @@ def handle_message(event):
                 {"role": "user", "content": user_message},
                 {"role": "assistant", "content": grounding_message}
             ],
-            "max_tokens": 800,
-            "temperature": 0.1,
-	        "top_p":0.6,
-	        "frequency_penalty":0.5,
-            "presence_penalty":0.1,
+            "max_tokens": 700,
+            "temperature": 0.0,
+	        "top_p":0.5,
+	        "frequency_penalty":0.0,  
+            "presence_penalty":0.0,
 	        "stop": ["เริ่มการสนทนาใหม่", "admin", "ผู้ดูแลระบบ","ไม่มีข้อมูลในระบบ"],  # เพิ่มคำที่ต้องการให้ AI หยุดเมื่อพบ
-            "stream":False
+            "stream":False  
         }
-
         
         response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload)
         
@@ -168,11 +162,20 @@ def search_documents(query, top=5):
         return ["ขออภัย ไม่สามารถเรียกข้อมูลได้ค่ะ"]
     
 
+def show_loading_animation(user_id):
+    try:
+        # ส่งข้อความแจ้งให้รอ พร้อมกับสติกเกอร์
+        loading_message = TextSendMessage(text="กำลังโหลดข้อมูล... กรุณารอสักครู่ 🕐")
+        line_bot_api.push_message(user_id, loading_message)
+
+    except Exception as e:
+        print(f"Error sending loading animation: {e}")
+
+@app.post("/send_loading/{user_id}")
+async def send_loading(user_id: str):
+    show_loading_animation(user_id)
+    return {"message": "Loading animation sent"}
     
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
-
-
