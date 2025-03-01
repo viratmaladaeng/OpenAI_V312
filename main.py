@@ -114,32 +114,7 @@ def handle_message(event):
             frequency_penalty=0,
             presence_penalty=0,
             stop=None,
-            stream=False,
-            extra_body={
-                "data_sources": [{
-                    "type": "azure_search",
-                    "parameters": {
-                        "endpoint": AZURE_SEARCH_ENDPOINT,
-                        "index_name": "vector-1740486054179",
-                        "semantic_configuration": "vector-1740486054179-semantic-configuration",
-                        "query_type": "vector_semantic_hybrid",
-                        "fields_mapping": {},
-                        "in_scope": True,
-                        "role_information": "You are an AI assistant that helps people find information.",
-                        "filter": None,
-                        "strictness": 3,
-                        "top_n_documents": 5,
-                        "authentication": {
-                            "type": "api_key",
-                            "key": AZURE_SEARCH_KEY
-                        }
-                    }
-                }],
-                "embedding_dependency": {
-                    "type": "gpt-4o-mini",
-                    "deployment_name": "text-embedding-ada-002 680208"
-                }
-            }
+            stream=False
         )
 
         if hasattr(completion, "choices") and len(completion.choices) > 0:
