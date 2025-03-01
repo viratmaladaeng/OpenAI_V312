@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 import openai
 from azure.search.documents import SearchClient
 from azure.core.credentials import AzureKeyCredential
-from openai import AzureOpenAI  
 
 load_dotenv()
 
@@ -33,20 +32,11 @@ if not all([
 ]):
     raise ValueError("Environment variables not set properly")
 
-"""
 # Initialize Azure OpenAI
 openai.api_type = "azure"
 openai.api_base = AZURE_OPENAI_ENDPOINT
 openai.api_key = AZURE_OPENAI_API_KEY
 openai.api_version = "2024-08-01-preview"
-"""
-
-# Initialize Azure OpenAI Service client with key-based authentication    
-client = AzureOpenAI(  
-    azure_endpoint=AZURE_OPENAI_ENDPOINT,  
-    api_key=AZURE_OPENAI_API_KEY,  
-    api_version="2024-08-01-preview",
-)
 
 # ฟังก์ชันอ่านไฟล์ข้อความ
 def read_file(filename):
@@ -98,41 +88,57 @@ def handle_message(event):
     user_message = event.message.text
 
     if user_message == "เริ่มการสนทนาใหม่":
-        reply_message = "💬 ยินดีต้อนรับลูกค้า แจ้งว่าต้องการทราบข้อมูลสินค้า หรือบริการใดเพิ่มเติมค่ะ"
+        # ตอบกลับข้อความพิเศษ
+        reply_message = "รบกวนคุณลูกค้าแจ้งว่าต้องการทราบข้อมูลสินค้า หรือบริการใดเพิ่มเติมค่ะ"
     else:
-        chat_prompt = [
-            {"role": "system", "content": [{"type": "text", "text": system_message}]},
-            {"role": "user", "content": [{"type": "text", "text": user_message}]}
-        ]
+        # ค้นหาเอกสารจาก Azure Cognitive Search
+        search_results = search_documents(user_message)
 
-        messages = chat_prompt
-        completion = client.chat.completions.create(
-            messages=messages,
-            max_tokens=800,
-            temperature=0.7,
-            top_p=0.95,
-            frequency_penalty=0,
-            presence_penalty=0,
-            stop=None,
-            stream=False
-        )
+        # หากไม่มีผลลัพธ์ ให้ใช้ข้อความจาก grounding.txt
+        grounding_message = grounding_text if not search_results or "Error" in search_results[0] else "\n\n".join(search_results)
 
-        if hasattr(completion, "choices") and len(completion.choices) > 0:
-            reply_message = completion.choices[0].message.content
+        # ส่งข้อความไปยัง Azure OpenAI
+        headers = {
+            "Content-Type": "application/json",
+            "api-key": AZURE_OPENAI_API_KEY
+        }
+
+        payload = {
+            "messages": [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message},
+                {"role": "assistant", "content": grounding_message}
+            ],
+            "max_tokens": 3000,
+            "temperature": 0.7,
+	        "top_p":0.95,
+	        "frequency_penalty":0.0,  
+            "presence_penalty":0.0,
+	        "stop": ["เริ่มการสนทนาใหม่", "admin", "ผู้ดูแลระบบ","ไม่มีข้อมูลในระบบ"],  # เพิ่มคำที่ต้องการให้ AI หยุดเมื่อพบ
+            "stream":False  
+        }
+
+        
+        response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload)
+        
+        if response.status_code == 200:
+            openai_response = response.json()
+            reply_message = openai_response["choices"][0]["message"]["content"]
         else:
             reply_message = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
 
-    quick_reply_buttons = QuickReply(items=[
-        QuickReplyButton(action=MessageAction(label="🔄 เริ่มใหม่", text="เริ่มการสนทนาใหม่")),
-        QuickReplyButton(action=MessageAction(label="🔍 ค้นหาสินค้า", text="ค้นหาสินค้าใหม่")),
-        QuickReplyButton(action=MessageAction(label="📞 ติดต่อเจ้าหน้าที่", text="ติดต่อเจ้าหน้าที่"))
-    ])
+        # สร้างปุ่ม Quick Reply
+        quick_reply_buttons = QuickReply(items=[
+            QuickReplyButton(action=MessageAction(label="🔄 เริ่มใหม่", text="เริ่มการสนทนาใหม่")),
+            QuickReplyButton(action=MessageAction(label="🔍 ค้นหาสินค้า", text="ค้นหาสินค้าใหม่")),
+            QuickReplyButton(action=MessageAction(label="📞 ติดต่อเจ้าหน้าที่", text="ติดต่อเจ้าหน้าที่"))
+        ])
 
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=reply_message, quick_reply=quick_reply_buttons)
-    )
-
+        # ส่งข้อความกลับไปยัง Line พร้อม Quick Reply
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=reply_message, quick_reply=quick_reply_buttons)
+        )
 
 
 def search_documents(query, top=5):
