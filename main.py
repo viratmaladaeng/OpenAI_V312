@@ -109,7 +109,6 @@ def handle_message(event):
                 {"role": "user", "content": user_message},
                 {"role": "assistant", "content": grounding_message}
             ],
-            "model": AZURE_OAI_DEPLOYMENT,
             "max_tokens": 800,
             "temperature": 0.7,
 	        "top_p":0.95,
