@@ -36,7 +36,7 @@ if not all([
 openai.api_type = "azure"
 openai.api_base = AZURE_OPENAI_ENDPOINT
 openai.api_key = AZURE_OPENAI_API_KEY
-openai.api_version = "2024-05-01-preview"
+openai.api_version = "2024-08-01-preview"
 
 # ฟังก์ชันอ่านไฟล์ข้อความ
 def read_file(filename):
@@ -98,32 +98,34 @@ def handle_message(event):
         grounding_message = grounding_text if not search_results or "Error" in search_results[0] else "\n\n".join(search_results)
 
         # ส่งข้อความไปยัง Azure OpenAI
-        headers = {
+        """headers = {
             "Content-Type": "application/json",
             "api-key": AZURE_OPENAI_API_KEY
-        }
+        }"""
 
-        payload = {
-            "messages": [
+        response = openai.ChatCompletion.create(
+            #model=AZURE_OAI_DEPLOYMENT,
+            messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_message},
                 {"role": "assistant", "content": grounding_message}
-            ],
-            "max_tokens": 800,
-            "temperature": 0.7,
-	        "top_p":0.95,
-	        "frequency_penalty":0.0,  
-            "presence_penalty":0.0,
-	        "stop": ["เริ่มการสนทนาใหม่", "admin", "ผู้ดูแลระบบ","ไม่มีข้อมูลในระบบ"],  # เพิ่มคำที่ต้องการให้ AI หยุดเมื่อพบ
-            "stream":False  
-        }
+            ]
+            ,
+                past_messages=5,
+                max_tokens=700,
+                temperature=0.4,
+                top_p=0.7,
+                frequency_penalty=0.0,
+                presence_penalty=0.0
+        )
 
         
-        response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload)
+        #response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload)
         
         if response.status_code == 200:
-            openai_response = response.json()
-            reply_message = openai_response["choices"][0]["message"]["content"]
+            #openai_response = response.json()
+            #reply_message = openai_response["choices"][0]["message"]["content"]
+            reply_message = response["choices"][0]["message"]["content"]
         else:
             reply_message = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
 
