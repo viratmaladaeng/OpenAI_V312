@@ -132,41 +132,41 @@ def handle_message(event):
 
         # เรียกใช้งาน OpenAI API ผ่าน client SDK
         completion = client.chat.completions.create(
-            model=AZURE_DEPLOYMENT_NAME,
-            messages=[
-                {"role": "system", "content": "You are an AI assistant that helps people find information." + sku_context},
-                {"role": "user", "content": user_message},
-                {"role": "assistant", "content": grounding_message}
-            ],
-            max_tokens=800,
-            temperature=0.7,
-            top_p=0.95,
-            frequency_penalty=0,
-            presence_penalty=0,
-            stop=None,
-            stream=False,
-            extra_body={
-                "data_sources": [{
-                    "type": "azure_search",
-                    "parameters": {
-                        "endpoint": AZURE_SEARCH_ENDPOINT,
-                        "index_name": AZURE_SEARCH_INDEX,
-                        "semantic_configuration": f"{AZURE_SEARCH_INDEX}-semantic-configuration",
-                        "query_type": "semantic",
-                        "fields_mapping": {},
-                        "in_scope": True,
-                        "role_information": "You are an AI assistant that helps people find information.",
-                        "filter": None,
-                        "strictness": 3,
-                        "top_n_documents": 5,
-                        "authentication": {
-                            "type": "api_key",
-                            "key": AZURE_SEARCH_KEY
-                        }
+        model=AZURE_DEPLOYMENT_NAME,
+        messages=[
+            {"role": "system", "content": system_message + sku_context},  # ใช้ system_message ที่อ่านจากไฟล์
+            {"role": "user", "content": user_message},
+            {"role": "assistant", "content": grounding_message}
+        ],
+        max_tokens=800,
+        temperature=0.7,
+        top_p=0.95,
+        frequency_penalty=0,
+        presence_penalty=0,
+        stop=None,
+        stream=False,
+        extra_body={
+            "data_sources": [{
+                "type": "azure_search",
+                "parameters": {
+                    "endpoint": AZURE_SEARCH_ENDPOINT,
+                    "index_name": AZURE_SEARCH_INDEX,
+                    "semantic_configuration": f"{AZURE_SEARCH_INDEX}-semantic-configuration",
+                    "query_type": "semantic",
+                    "fields_mapping": {},
+                    "in_scope": True,
+                    "role_information": system_message,  # เพิ่ม system_message ที่อ่านมาจากไฟล์
+                    "filter": None,
+                    "strictness": 3,
+                    "top_n_documents": 5,
+                    "authentication": {
+                        "type": "api_key",
+                        "key": AZURE_SEARCH_KEY
                     }
-                }]
-            }
-        )
+                }
+            }]
+        }
+    )
 
         reply_message = completion.choices[0].message.content if completion else "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
 
