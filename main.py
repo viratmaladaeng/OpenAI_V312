@@ -103,25 +103,28 @@ def handle_message(event):
             "api-key": AZURE_OPENAI_API_KEY
         }
 
-        response = openai.ChatCompletion.create(
-            model=AZURE_OAI_DEPLOYMENT,
-            messages=[
+        payload = {
+            "messages": [
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_message},
                 {"role": "assistant", "content": grounding_message}
             ],
-            max_tokens=700,
-            temperature=0.4,
-            top_p=0.7,
-            frequency_penalty=0.0,
-            presence_penalty=0.0
-        )       
-       
+            "model": AZURE_OAI_DEPLOYMENT,
+            "max_tokens": 800,
+            "temperature": 0.7,
+	        "top_p":0.95,
+	        "frequency_penalty":0.0,  
+            "presence_penalty":0.0,
+	        "stop": ["เริ่มการสนทนาใหม่", "admin", "ผู้ดูแลระบบ","ไม่มีข้อมูลในระบบ"],  # เพิ่มคำที่ต้องการให้ AI หยุดเมื่อพบ
+            "stream":False  
+        }
+
+        
+        response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload)
         
         if response.status_code == 200:
-            #openai_response = response.json()
-            #reply_message = openai_response["choices"][0]["message"]["content"]
-            reply_message = response["choices"][0]["message"]["content"]
+            openai_response = response.json()
+            reply_message = openai_response["choices"][0]["message"]["content"]
         else:
             reply_message = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
 
@@ -163,21 +166,7 @@ def search_documents(query, top=5):
         print(f"Error occurred during Azure Search: {e}")
         return ["ขออภัย ไม่สามารถเรียกข้อมูลได้ค่ะ"]
     
-
-def show_loading_animation(user_id):
-    try:
-        # ส่งข้อความแจ้งให้รอ พร้อมกับสติกเกอร์
-        loading_message = TextSendMessage(text="กำลังโหลดข้อมูล... กรุณารอสักครู่ 🕐")
-        line_bot_api.push_message(user_id, loading_message)
-
-    except Exception as e:
-        print(f"Error sending loading animation: {e}")
-
-@app.post("/send_loading/{user_id}")
-async def send_loading(user_id: str):
-    show_loading_animation(user_id)
-    return {"message": "Loading animation sent"}
-    
+  
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
