@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import openai
 from azure.search.documents import SearchClient
 from azure.core.credentials import AzureKeyCredential
+from openai import AzureOpenAI  
 
 load_dotenv()
 
@@ -32,11 +33,20 @@ if not all([
 ]):
     raise ValueError("Environment variables not set properly")
 
+"""
 # Initialize Azure OpenAI
 openai.api_type = "azure"
 openai.api_base = AZURE_OPENAI_ENDPOINT
 openai.api_key = AZURE_OPENAI_API_KEY
 openai.api_version = "2024-08-01-preview"
+"""
+
+# Initialize Azure OpenAI Service client with key-based authentication    
+client = AzureOpenAI(  
+    azure_endpoint=AZURE_OPENAI_ENDPOINT,  
+    api_key=AZURE_OPENAI_API_KEY,  
+    api_version="2024-08-01-preview",
+)
 
 # ฟังก์ชันอ่านไฟล์ข้อความ
 def read_file(filename):
@@ -102,15 +112,15 @@ def handle_message(event):
             "Content-Type": "application/json",
             "api-key": AZURE_OPENAI_API_KEY
         }"""
-
-        response = openai.ChatCompletion.create(
-            #model=AZURE_OAI_DEPLOYMENT,
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": user_message},
-                {"role": "assistant", "content": grounding_message}
-            ]
-            ,
+        messages={[
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": user_message},
+            {"role": "assistant", "content": grounding_message}
+        ]}
+        
+        response = client.chat.completions.create(
+            model=AZURE_OAI_DEPLOYMENT,
+            messages=messages,
                 past_messages=5,
                 max_tokens=700,
                 temperature=0.4,
