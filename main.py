@@ -117,7 +117,9 @@ def handle_message(event):
 
         if response.status_code == 200:
             openai_response = response.json()
-            reply_message = openai_response["choices"][0]["message"]["content"]
+            #reply_message = openai_response["choices"][0]["message"]["content"]
+            reply_message = response["choices"][0]["message"]["content"]
+
         else:
             reply_message = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
 
@@ -130,6 +132,7 @@ def handle_message(event):
 
     # ส่งข้อความกลับไปยัง Line
     line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_message, quick_reply=quick_reply_buttons))
+    
 
 def search_documents(query, top=5):
     """ ค้นหาข้อมูลจาก Azure Cognitive Search """
