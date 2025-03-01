@@ -2,13 +2,13 @@ import os
 from fastapi import FastAPI, Request, HTTPException
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction
-import openai
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction, FollowEvent, StickerSendMessage, ImageSendMessage
 import requests
+from dotenv import load_dotenv
+import openai
 from azure.search.documents import SearchClient
 from azure.core.credentials import AzureKeyCredential
-from collections import deque, defaultdict  # ใช้ defaultdict เพื่อเก็บ session memory หลาย user
-from dotenv import load_dotenv
+from collections import deque  # ใช้ deque สำหรับเก็บประวัติข้อความแบบ FIFO
 
 load_dotenv()
 
@@ -23,9 +23,9 @@ AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
 AZURE_SEARCH_ENDPOINT = os.getenv("AZURE_SEARCH_ENDPOINT")
 AZURE_SEARCH_KEY = os.getenv("AZURE_SEARCH_KEY")
 AZURE_SEARCH_INDEX = os.getenv("AZURE_SEARCH_INDEX")
-AZURE_DEPLOYMENT_NAME = os.getenv("AZURE_DEPLOYMENT_NAME")
+AZURE_OAI_DEPLOYMENT = os.getenv("AZURE_OAI_DEPLOYMENT")
 
-# ตรวจสอบว่าค่าถูกต้อง
+# ตรวจสอบว่าค่าถูกตั้งไว้
 if not all([
     LINE_CHANNEL_SECRET, LINE_CHANNEL_ACCESS_TOKEN, 
     AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY,
@@ -33,18 +33,29 @@ if not all([
 ]):
     raise ValueError("Environment variables not set properly")
 
-# ตั้งค่า OpenAI SDK
+# Initialize Azure OpenAI
 openai.api_type = "azure"
 openai.api_base = AZURE_OPENAI_ENDPOINT
 openai.api_key = AZURE_OPENAI_API_KEY
 openai.api_version = "2024-05-01-preview"
 
+# ฟังก์ชันอ่านไฟล์ข้อความ
+def read_file(filename):
+    if os.path.exists(filename):
+        with open(filename, "r", encoding="utf-8") as file:
+            return file.read().strip()
+    return ""
+
+# โหลดข้อความจาก system.txt และ grounding.txt
+system_message = read_file("system.txt")
+grounding_text = read_file("grounding.txt")
+
 # ตั้งค่า Line Messaging API
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
-# ใช้ defaultdict(deque) เพื่อเก็บประวัติแชท (FIFO)
-session_memory = defaultdict(lambda: deque(maxlen=5))
+# Session Memory สำหรับเก็บประวัติการสนทนา (จำ 5 ข้อความล่าสุดของแต่ละ user)
+session_memory = {}
 
 @app.get("/")
 async def read_root():
@@ -67,39 +78,50 @@ def handle_message(event):
     user_id = event.source.user_id
     user_message = event.message.text
 
+    # ถ้าเป็นการเริ่มต้นใหม่ ให้ล้าง session
     if user_message == "เริ่มการสนทนาใหม่":
-        session_memory[user_id].clear()  # ล้างประวัติ
+        session_memory[user_id] = deque(maxlen=5)  # รีเซ็ต session
         reply_message = "🔄 คุณสามารถสอบถามข้อมูลสินค้าได้เลยค่ะ"
     else:
-        # 🔹 ค้นหาข้อมูลจาก Azure Search
+        # ดึงข้อมูลจาก Azure Search
         search_results = search_documents(user_message)
+
+        # กำหนดข้อความพื้นฐาน
         grounding_message = "\n\n".join(search_results) if search_results else "ไม่พบข้อมูลที่เกี่ยวข้องค่ะ"
 
-        # 🔹 เก็บ Context ของผู้ใช้
+        # เพิ่มข้อมูลที่ผู้ใช้คุยก่อนหน้าเข้าไปใน Context
+        if user_id not in session_memory:
+            session_memory[user_id] = deque(maxlen=5)  # เก็บได้ 5 ประโยคล่าสุด
+
         session_memory[user_id].append({"role": "user", "content": user_message})
         session_memory[user_id].append({"role": "assistant", "content": grounding_message})
 
-        # 🔹 สร้างข้อความเพื่อส่งไปยัง Azure OpenAI
-        messages = [
-            {"role": "system", "content": "คุณเป็นผู้ช่วยที่สามารถตอบคำถามเกี่ยวกับสินค้าได้"}
-        ] + list(session_memory[user_id])  # ใส่ประวัติแชท
+        # สร้างข้อความเพื่อส่งไปยัง Azure OpenAI
+        messages = [{"role": "system", "content": "คุณเป็นผู้ช่วยที่สามารถตอบคำถามเกี่ยวกับสินค้าได้"}]
+        messages.extend(session_memory[user_id])  # ใส่ประวัติการสนทนาเข้าไป
+        messages.append({"role": "user", "content": user_message})  # ข้อความล่าสุด
 
-        # 🔹 เรียก Azure OpenAI API
-        try:
-            response = openai.ChatCompletion.create(
-                engine=AZURE_DEPLOYMENT_NAME,
-                messages=messages,
-                max_tokens=700,
-                temperature=0.4,
-                top_p=0.7,
-                frequency_penalty=0.0,  
-                presence_penalty=0.0
-            )
-            reply_message = response["choices"][0]["message"]["content"]
-        except Exception as e:
+        response = openai.ChatCompletion.create(
+            model=AZURE_OAI_DEPLOYMENT,
+            messages=messages,
+            max_tokens=700,
+            temperature=0.4,
+            top_p=0.7,
+            frequency_penalty=0.0,
+            presence_penalty=0.0
+        )
+
+
+        headers = {"Content-Type": "application/json", "api-key": AZURE_OPENAI_API_KEY}
+        response = requests.post(AZURE_OPENAI_ENDPOINT, headers=headers, json=payload)
+
+        if response.status_code == 200:
+            openai_response = response.json()
+            reply_message = openai_response["choices"][0]["message"]["content"]
+        else:
             reply_message = "ขออภัย ระบบมีปัญหาในการเชื่อมต่อกับ Azure OpenAI"
 
-    # 🔹 Quick Reply
+    # สร้าง Quick Reply
     quick_reply_buttons = QuickReply(items=[
         QuickReplyButton(action=MessageAction(label="🔄 เริ่มใหม่", text="เริ่มการสนทนาใหม่")),
         QuickReplyButton(action=MessageAction(label="🔍 ค้นหาสินค้า", text="ค้นหาสินค้าใหม่")),
