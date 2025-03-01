@@ -119,7 +119,6 @@ def handle_message(event):
         ]}
         
         response = client.chat.completions.create(
-            model=AZURE_OAI_DEPLOYMENT,
             messages=messages,
                 past_messages=5,
                 max_tokens=700,
