@@ -107,7 +107,6 @@ def handle_message(event):
 
         messages = chat_prompt
         completion = client.chat.completions.create(
-            model=AZURE_OAI_DEPLOYMENT,
             messages=messages,
             max_tokens=800,
             temperature=0.7,
